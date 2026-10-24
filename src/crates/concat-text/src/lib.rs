@@ -1637,6 +1637,9 @@ fn push_rounded_rect(builder: &mut PathBuilder, rect: Rect, radius: f32) {
 pub enum Figure {
     /// Four equal sides.
     Square,
+    /// A rectangle with its own width and height, so a border drawn on it
+    /// keeps one thickness on every side however wide or tall it is made.
+    Box,
     /// A disc.
     Circle,
     /// Equilateral, point up.
@@ -1659,6 +1662,12 @@ pub struct ShapeStyle {
     pub figure: Figure,
     /// The figure's longer side.
     pub size: f64,
+    /// A box's own width, as a fraction of the frame's height; only the
+    /// [`Figure::Box`] figure reads it, the rest size from `size`.
+    pub width: f64,
+    /// A box's own height, as a fraction of the frame's height; only the
+    /// [`Figure::Box`] figure reads it.
+    pub height: f64,
     /// The inside's colour, `#rrggbb[aa]`; empty for an outline alone.
     pub fill: String,
     /// The outline's colour; a line or an arrow is drawn in this, falling
@@ -1740,6 +1749,13 @@ fn paint_shape(style: &ShapeStyle, width: u32, height: u32) -> Result<(Pixmap, B
     // The figure's own box, before any outline: (w, h), centred.
     let (w, h) = match style.figure {
         Figure::Square | Figure::Circle => (size, size),
+        // The box's sides are carried on the style, already in the shape the
+        // clip wants, so the border is stroked at one thickness all round
+        // rather than pulled along by a later stretch.
+        Figure::Box => (
+            (style.width.max(0.01) as f32) * frame_h,
+            (style.height.max(0.01) as f32) * frame_h,
+        ),
         Figure::Triangle => (size, size * 0.866),
         Figure::Parallelogram | Figure::Trapezoid => (size, size * 0.6),
         Figure::Line => (size, rule),
@@ -1750,7 +1766,7 @@ fn paint_shape(style: &ShapeStyle, width: u32, height: u32) -> Result<(Pixmap, B
 
     let mut path = PathBuilder::new();
     let closed = match style.figure {
-        Figure::Square => {
+        Figure::Square | Figure::Box => {
             path.push_rect(
                 Rect::from_ltrb(left, top, right, bottom).ok_or(Error::Canvas(width, height))?,
             );
@@ -1890,6 +1906,10 @@ fn figure_outline(style: &ShapeStyle, width: u32, height: u32) -> Vec<Vec<[f32; 
     let cy = frame_h / 2.0;
     let (w, h) = match style.figure {
         Figure::Square | Figure::Circle => (size, size),
+        Figure::Box => (
+            (style.width.max(0.01) as f32) * frame_h,
+            (style.height.max(0.01) as f32) * frame_h,
+        ),
         Figure::Triangle => (size, size * 0.866),
         Figure::Parallelogram | Figure::Trapezoid => (size, size * 0.6),
         Figure::Line => (size, rule),
@@ -1898,7 +1918,7 @@ fn figure_outline(style: &ShapeStyle, width: u32, height: u32) -> Vec<Vec<[f32; 
     let (left, top) = (cx - w / 2.0, cy - h / 2.0);
     let (right, bottom) = (left + w, top + h);
     match style.figure {
-        Figure::Square => vec![vec![
+        Figure::Square | Figure::Box => vec![vec![
             [left, top],
             [right, top],
             [right, bottom],
@@ -2670,6 +2690,8 @@ mod tests {
         let square = ShapeStyle {
             figure: Figure::Square,
             size: 0.5,
+            width: 0.0,
+            height: 0.0,
             fill: "#ff0000".to_owned(),
             stroke: String::new(),
             stroke_width: 0.0,
@@ -2687,6 +2709,8 @@ mod tests {
         let line = ShapeStyle {
             figure: Figure::Line,
             size: 0.5,
+            width: 0.0,
+            height: 0.0,
             fill: "#00ff00".to_owned(),
             stroke: String::new(),
             stroke_width: 0.05,

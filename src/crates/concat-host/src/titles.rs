@@ -229,7 +229,7 @@ impl Titles {
         let timeline = project.active();
         let mut out = Vec::new();
         for clip in &timeline.clips {
-            let (text, shape);
+            let (text, mut shape);
             let painting = match clip.kind {
                 ModelClipKind::Text => {
                     text = clip.text.clone().unwrap_or_default();
@@ -237,6 +237,13 @@ impl Titles {
                 }
                 ModelClipKind::Shape => {
                     shape = clip.shape.clone().unwrap_or_default();
+                    // A box carries its own sides, sized from the clip's
+                    // stretch so it is drawn at the aspect wanted with an
+                    // even border; the compositor then leaves it unstretched.
+                    if shape.kind == ShapeKind::Box {
+                        shape.box_width = shape.size * clip.stretch_x;
+                        shape.box_height = shape.size * clip.stretch_y;
+                    }
                     Painting::Shape(&shape)
                 }
                 _ => continue,
@@ -305,13 +312,17 @@ impl Titles {
                     // kept those captions squashed after the wrap arrived.
                     // https://github.com/jub0t/Concat/issues/119
                     // A shape is pulled: that is how a square becomes
-                    // the rectangle that was wanted.
+                    // the rectangle that was wanted. A box is not - its own
+                    // sides already carry that aspect, baked in at the paint,
+                    // so a second stretch would only thin one border.
                     stretch_x: match painting {
                         Painting::Title(_) => 1.0,
+                        Painting::Shape(style) if style.kind == ShapeKind::Box => 1.0,
                         Painting::Shape(_) => clip.stretch_x,
                     },
                     stretch_y: match painting {
                         Painting::Title(_) => 1.0,
+                        Painting::Shape(style) if style.kind == ShapeKind::Box => 1.0,
                         Painting::Shape(_) => clip.stretch_y,
                     },
                     // The style's own opacity multiplies the clip's: a
@@ -617,6 +628,7 @@ fn shape_style(style: &ShapeStyle) -> concat_text::ShapeStyle {
     concat_text::ShapeStyle {
         figure: match style.kind {
             ShapeKind::Square => Figure::Square,
+            ShapeKind::Box => Figure::Box,
             ShapeKind::Circle => Figure::Circle,
             ShapeKind::Triangle => Figure::Triangle,
             ShapeKind::Parallelogram => Figure::Parallelogram,
@@ -625,6 +637,8 @@ fn shape_style(style: &ShapeStyle) -> concat_text::ShapeStyle {
             ShapeKind::Arrow => Figure::Arrow,
         },
         size: style.size,
+        width: style.box_width,
+        height: style.box_height,
         fill: style.fill.clone(),
         stroke: style.stroke.clone(),
         stroke_width: style.stroke_width,

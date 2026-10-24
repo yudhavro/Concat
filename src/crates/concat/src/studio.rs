@@ -5955,6 +5955,10 @@ impl Studio {
             let side = shape.size.clamp(0.01, 2.0) * height;
             let (w, h) = match shape.kind {
                 model::ShapeKind::Square | model::ShapeKind::Circle => (side, side),
+                // A box is drawn at its own aspect, which comes from the
+                // clip's stretch, so the grip's box grows with it the way the
+                // painted figure does.
+                model::ShapeKind::Box => (side * clip.stretch_x, side * clip.stretch_y),
                 model::ShapeKind::Triangle => (side, side * 0.866),
                 model::ShapeKind::Parallelogram | model::ShapeKind::Trapezoid => (side, side * 0.6),
                 model::ShapeKind::Line => (side, shape.stroke_width * height),

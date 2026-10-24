@@ -220,6 +220,10 @@ fn is_false(value: &bool) -> bool {
     !value
 }
 
+fn is_zero_f64(value: &f64) -> bool {
+    *value == 0.0
+}
+
 /// A lane. Deliberately untyped: any media goes on any track.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -1360,6 +1364,10 @@ pub enum ShapeKind {
     /// Four equal sides; the default, and what the reader falls back to.
     #[default]
     Square,
+    /// A rectangle with its own width and height. Unlike a stretched square,
+    /// its border keeps one thickness on every side, so it is the figure to
+    /// reach for when a box of any aspect was wanted.
+    Box,
     /// A disc.
     Circle,
     /// Equilateral, point up.
@@ -1379,6 +1387,7 @@ impl ShapeKind {
     pub fn id(self) -> &'static str {
         match self {
             ShapeKind::Square => "square",
+            ShapeKind::Box => "box",
             ShapeKind::Circle => "circle",
             ShapeKind::Triangle => "triangle",
             ShapeKind::Parallelogram => "parallelogram",
@@ -1392,6 +1401,7 @@ impl ShapeKind {
     pub fn parse(id: &str) -> Option<ShapeKind> {
         [
             ShapeKind::Square,
+            ShapeKind::Box,
             ShapeKind::Circle,
             ShapeKind::Triangle,
             ShapeKind::Parallelogram,
@@ -1416,6 +1426,14 @@ pub struct ShapeStyle {
     pub kind: ShapeKind,
     /// The figure's longer side, as a fraction of frame height.
     pub size: f64,
+    /// A box's width, as a fraction of frame height; the host fills it in
+    /// from the clip's own stretch so the figure is drawn at the aspect
+    /// wanted and its border stays even. Ignored by every other figure.
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub box_width: f64,
+    /// A box's height, as a fraction of frame height; see [`ShapeStyle::box_width`].
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub box_height: f64,
     /// The inside's colour as `#rrggbb[aa]`; empty for an outline alone.
     pub fill: String,
     /// The outline's colour, drawn when `stroke_width` is above zero. A
@@ -1461,6 +1479,8 @@ impl ShapeStyle {
         }
         let base = ShapeStyle::default();
         self.size = finite(self.size, base.size).clamp(0.01, 2.0);
+        self.box_width = finite(self.box_width, base.box_width).clamp(0.0, 4.0);
+        self.box_height = finite(self.box_height, base.box_height).clamp(0.0, 4.0);
         self.stroke_width = finite(self.stroke_width, base.stroke_width).clamp(0.0, 0.5);
         self.stroke_dash = finite(self.stroke_dash, base.stroke_dash).clamp(0.0, 1.0);
         self.stroke_speed = finite(self.stroke_speed, base.stroke_speed).clamp(0.0, 8.0);
@@ -1475,6 +1495,10 @@ impl Default for ShapeStyle {
             // A third of the frame's height: big enough to be the point of
             // the frame, small enough to leave the picture around it.
             size: 0.35,
+            // A box's own sides, when the figure is a box; every other
+            // figure sizes from `size` and leaves these at zero.
+            box_width: 0.0,
+            box_height: 0.0,
             fill: "#ffffff".to_owned(),
             stroke: String::new(),
             // A line or an arrow is nothing but its stroke, so the default

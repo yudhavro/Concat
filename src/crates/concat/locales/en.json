@@ -350,6 +350,7 @@
   "mediaPane.reloadCustomEffects": "Reload custom effects",
   "mediaPane.saveProjectTemplate": "Save this project as a template",
   "mediaPane.shapeArrow": "Arrow",
+  "mediaPane.shapeBox": "Box",
   "mediaPane.shapeCircle": "Circle",
   "mediaPane.shapeLine": "Line",
   "mediaPane.shapeParallelogram": "Parallelogram",
