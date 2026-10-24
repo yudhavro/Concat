@@ -1413,6 +1413,16 @@ pub struct ShapeStyle {
     /// The outline's thickness as a fraction of frame height; zero for a
     /// figure with no outline. A line's and an arrow's own thickness.
     pub stroke_width: f64,
+    /// How long the finished outline is held before it retracts, as a
+    /// fraction of one drawing pass: 0.0 runs straight back out again, 1.0
+    /// holds it whole for a full pass. Only read while the border is animated
+    /// by [`ShapeStyle::stroke_speed`].
+    pub stroke_dash: f64,
+    /// How long one pass of the outline drawing takes, in seconds: the border
+    /// traces itself on over this many seconds, holds for `stroke_dash` of a
+    /// pass, then retracts and loops. Zero leaves the border still, so it is
+    /// not animated. Only read when an outline is drawn.
+    pub stroke_speed: f64,
 }
 
 impl ShapeStyle {
@@ -1424,6 +1434,15 @@ impl ShapeStyle {
         }
     }
 
+    /// Whether the outline draws itself: an outline is drawn and a pass
+    /// length above zero drives it. A line or an arrow counts as an outline
+    /// of its own stroke.
+    pub fn animated(&self) -> bool {
+        let drawn = self.stroke_width > 0.0
+            && (!self.stroke.is_empty() || matches!(self.kind, ShapeKind::Line | ShapeKind::Arrow));
+        drawn && self.stroke_speed > 0.0
+    }
+
     /// Every number back in its range; see [`TextStyle::tidy`].
     pub fn tidy(mut self) -> ShapeStyle {
         fn finite(value: f64, fallback: f64) -> f64 {
@@ -1432,6 +1451,8 @@ impl ShapeStyle {
         let base = ShapeStyle::default();
         self.size = finite(self.size, base.size).clamp(0.01, 2.0);
         self.stroke_width = finite(self.stroke_width, base.stroke_width).clamp(0.0, 0.5);
+        self.stroke_dash = finite(self.stroke_dash, base.stroke_dash).clamp(0.0, 1.0);
+        self.stroke_speed = finite(self.stroke_speed, base.stroke_speed).clamp(0.0, 8.0);
         self
     }
 }
@@ -1449,6 +1470,10 @@ impl Default for ShapeStyle {
             // is a visible rule and not zero; a filled figure ignores it
             // until it is given an outline colour.
             stroke_width: 0.012,
+            // Solid and still: a shape looks the way it always did until
+            // the border is asked to run.
+            stroke_dash: 1.0,
+            stroke_speed: 0.0,
         }
     }
 }

@@ -27,7 +27,8 @@ use concat_core::shader::RevealMap;
 use concat_export::flatten::export_base;
 use concat_export::{ClipKind, ExportClip};
 use concat_project::model::{
-    ClipKind as ModelClipKind, KeyProperty, Project, ShapeKind, ShapeStyle, TextAlign, TextStyle,
+    AppliedFilter, ClipKind as ModelClipKind, KeyProperty, Project, ShapeKind, ShapeStyle, TextAlign,
+    TextStyle,
 };
 use concat_text::{Align, Figure, Fonts, TitleStyle, WordRect};
 
@@ -262,6 +263,21 @@ impl Titles {
                     continue;
                 }
             };
+            // A shape whose border runs carries its own look: the arc map
+            // the running segment reads through, and the effect that moves
+            // it. Any other painting has neither.
+            let run = match painting {
+                Painting::Shape(style) => shape_run(style, width, height),
+                Painting::Title(_) => None,
+            };
+            let effects = match &run {
+                Some((_, filter)) => {
+                    let mut effects = clip.video_effects.clone();
+                    effects.push(filter.clone());
+                    effects
+                }
+                None => clip.video_effects.clone(),
+            };
             out.push(TitleClip {
                 clip_id: clip.id.clone(),
                 clip: ExportClip {
@@ -273,7 +289,7 @@ impl Titles {
                     flip_h: clip.flip_h,
                     flip_v: clip.flip_v,
                     blend: clip.blend.clone(),
-                    effects: clip.video_effects.clone(),
+                    effects,
                     // A keyed property's keys travel absolute, on a
                     // neutral base, as a media clip's do: the clip's own
                     // offset under keys put the title at the two added,
@@ -311,10 +327,11 @@ impl Titles {
                     media_width: Some(width),
                     media_height: Some(height),
                     has_audio: Some(false),
-                    // A shape has no words to reveal one at a time.
+                    // A shape has no words to reveal one at a time; the
+                    // arc map a running border reads stands in for one.
                     reveal_map: match painting {
                         Painting::Title(_) => Some(Arc::clone(&art.reveal)),
-                        Painting::Shape(_) => None,
+                        Painting::Shape(_) => run.as_ref().map(|(map, _)| Arc::clone(map)),
                     },
                     ..ExportClip::blank(ClipKind::Image, clip.start, clip.duration, index)
                 },
@@ -612,6 +629,38 @@ fn shape_style(style: &ShapeStyle) -> concat_text::ShapeStyle {
         stroke: style.stroke.clone(),
         stroke_width: style.stroke_width,
     }
+}
+
+/// The intrinsic effect that moves a shape's running border. It is not a
+/// look a user picks from the library - the host attaches it to a shape
+/// whose border runs, exactly as it bakes the arc map it reads - so the
+/// picker hides it the way it hides the colour panel's own package.
+pub const STROKE_RUN_ID: &str = "concat.stroke-run";
+
+/// For a shape whose border runs: the arc map its lit segment reads, and
+/// the effect that moves it, carrying the segment's length and speed as its
+/// parameters. Nothing for a shape whose border is still or absent, or for
+/// any other painting.
+fn shape_run(style: &ShapeStyle, width: u32, height: u32) -> Option<(Arc<RevealMap>, AppliedFilter)> {
+    if !style.animated() {
+        return None;
+    }
+    let gray = concat_text::shape_arc_map(&shape_style(style), width, height);
+    let id = crate::media::fnv1a(&gray);
+    let map = Arc::new(RevealMap {
+        id,
+        width,
+        height,
+        gray: Arc::from(gray),
+    });
+    let mut filter = AppliedFilter::new(STROKE_RUN_ID);
+    filter
+        .params
+        .insert("dash".to_owned(), style.stroke_dash);
+    filter
+        .params
+        .insert("speed".to_owned(), style.stroke_speed);
+    Some((map, filter))
 }
 
 #[cfg(test)]

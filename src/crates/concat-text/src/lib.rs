@@ -1874,6 +1874,183 @@ fn paint_shape(style: &ShapeStyle, width: u32, height: u32) -> Result<(Pixmap, B
     Ok((canvas, block))
 }
 
+/// The figure's outline as the run of a border would travel it: one or more
+/// polylines in the order a lit segment lights them, from the start point
+/// round to it again, each point in canvas pixels. The same box
+/// [`paint_shape`] draws into, so a running border rides the outline it
+/// sees. A circle is met as a polygon of enough sides to be smooth.
+fn figure_outline(style: &ShapeStyle, width: u32, height: u32) -> Vec<Vec<[f32; 2]>> {
+    let frame_h = height as f32;
+    let size = (style.size.clamp(0.01, 2.0) as f32) * frame_h;
+    let rule = {
+        let asked = (style.stroke_width.max(0.0) as f32) * frame_h;
+        if asked > 0.0 { asked.max(1.0) } else { 0.0 }
+    };
+    let cx = width as f32 / 2.0;
+    let cy = frame_h / 2.0;
+    let (w, h) = match style.figure {
+        Figure::Square | Figure::Circle => (size, size),
+        Figure::Triangle => (size, size * 0.866),
+        Figure::Parallelogram | Figure::Trapezoid => (size, size * 0.6),
+        Figure::Line => (size, rule),
+        Figure::Arrow => (size, (rule * 4.0).max(size * 0.18)),
+    };
+    let (left, top) = (cx - w / 2.0, cy - h / 2.0);
+    let (right, bottom) = (left + w, top + h);
+    match style.figure {
+        Figure::Square => vec![vec![
+            [left, top],
+            [right, top],
+            [right, bottom],
+            [left, bottom],
+            [left, top],
+        ]],
+        Figure::Circle => {
+            // Enough chords that the arc a run travels is smooth against
+            // the true circle `paint_shape` strokes: a quarter turn per
+            // ninety sides bends well under a pixel at any size.
+            const SIDES: usize = 240;
+            let r = size / 2.0;
+            let mut ring = Vec::with_capacity(SIDES + 1);
+            for i in 0..=SIDES {
+                let a = (i as f32 / SIDES as f32) * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+                ring.push([cx + r * a.cos(), cy + r * a.sin()]);
+            }
+            vec![ring]
+        }
+        Figure::Triangle => vec![vec![
+            [cx, top],
+            [right, bottom],
+            [left, bottom],
+            [cx, top],
+        ]],
+        Figure::Parallelogram => {
+            let lean = w * 0.2;
+            vec![vec![
+                [left + lean, top],
+                [right, top],
+                [right - lean, bottom],
+                [left, bottom],
+                [left + lean, top],
+            ]]
+        }
+        Figure::Trapezoid => {
+            let inset = w * 0.2;
+            vec![vec![
+                [left + inset, top],
+                [right - inset, top],
+                [right, bottom],
+                [left, bottom],
+                [left + inset, top],
+            ]]
+        }
+        Figure::Line => vec![vec![[left + rule / 2.0, cy], [right - rule / 2.0, cy]]],
+        Figure::Arrow => {
+            // The shaft out to the tip, then both arms of the head off it:
+            // one continuous run, drawn as `paint_shape` draws it.
+            let arm = h / 2.0;
+            let tip = right - rule / 2.0;
+            vec![vec![
+                [left + rule / 2.0, cy],
+                [tip, cy],
+                [tip - arm, cy - arm],
+                [tip, cy],
+                [tip - arm, cy + arm],
+            ]]
+        }
+    }
+}
+
+/// A per-pixel map of where the figure's outline is and how far along it
+/// each pixel sits, one byte per pixel of a `width` × `height` canvas: zero
+/// wherever no border runs, and 1..=255 along it in the order a running
+/// segment lights it, from the start point round to it again. The host
+/// bakes this for a shape whose border runs and hands it to the shader that
+/// moves the lit segment, the way a title's per-word order reaches its
+/// reveal. Empty when the figure draws no outline.
+pub fn shape_arc_map(style: &ShapeStyle, width: u32, height: u32) -> Vec<u8> {
+    let area = (width as usize) * (height as usize);
+    let mut map = vec![0u8; area];
+    let frame_h = height as f32;
+    let rule = {
+        let asked = (style.stroke_width.max(0.0) as f32) * frame_h;
+        if asked > 0.0 { asked.max(1.0) } else { 0.0 }
+    };
+    if width == 0 || height == 0 || rule <= 0.0 {
+        return map;
+    }
+    let lines = figure_outline(style, width, height);
+    let dist = |a: &[f32; 2], b: &[f32; 2]| ((b[0] - a[0]).mul_add(b[0] - a[0], (b[1] - a[1]) * (b[1] - a[1]))).sqrt();
+    let mut total = 0.0;
+    for line in &lines {
+        for pair in line.windows(2) {
+            total += dist(&pair[0], &pair[1]);
+        }
+    }
+    if total <= 0.0 {
+        return map;
+    }
+    let mut canvas = match Pixmap::new(width, height) {
+        Some(canvas) => canvas,
+        None => return map,
+    };
+    let line_style = Stroke {
+        width: rule,
+        line_cap: LineCap::Round,
+        line_join: LineJoin::Round,
+        ..Stroke::default()
+    };
+    let mut acc = 0.0;
+    for line in &lines {
+        for pair in line.windows(2) {
+            let (a, b) = (&pair[0], &pair[1]);
+            let len = dist(a, b);
+            if len <= 0.0 {
+                continue;
+            }
+            // About one byte of arc resolution per pixel of the perimeter,
+            // floored at one step so even a hair's edge is placed.
+            let steps = ((len / total) * 255.0).round() as usize;
+            let steps = steps.max(1);
+            for step in 0..steps {
+                let t0 = step as f32 / steps as f32;
+                let t1 = (step + 1) as f32 / steps as f32;
+                let p0 = [a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0];
+                let p1 = [a[0] + (b[0] - a[0]) * t1, a[1] + (b[1] - a[1]) * t1];
+                let frac = (acc + len * t0) / total;
+                // 1..=255: zero is the shader's mark for "no border here,"
+                // so a start point is never mistaken for a gap.
+                let g = (1.0 + (frac * 254.0).round()).clamp(1.0, 255.0) as u8;
+                let mut paint = Paint::default();
+                paint.set_color(Color::from_rgba8(g, g, g, 255));
+                paint.anti_alias = false;
+                let mut builder = PathBuilder::new();
+                builder.move_to(p0[0], p0[1]);
+                builder.line_to(p1[0], p1[1]);
+                if let Some(path) = builder.finish() {
+                    canvas.stroke_path(
+                        &path,
+                        &paint,
+                        &line_style,
+                        Transform::identity(),
+                        None,
+                    );
+                }
+            }
+            acc += len;
+        }
+    }
+    // The stroke is laid down without anti-aliasing, so a covered pixel
+    // carries its full grey and its neighbours none; the red channel is
+    // that grey where the alpha says the border reached the pixel.
+    for (pixel, held) in canvas.pixels().iter().zip(map.iter_mut()) {
+        if pixel.alpha() > 0 {
+            *held = pixel.red().max(1);
+        }
+    }
+    map
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

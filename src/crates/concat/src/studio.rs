@@ -1238,8 +1238,10 @@ fn shelves(
     for package in Catalogue::builtin().of_kind(kind) {
         let meta = &package.manifest.effect;
         // The colour panel's own package: every picture clip can carry it,
-        // and it has a tab, not a shelf.
-        if meta.id == ADJUST_ID || !keep(package) {
+        // and it has a tab, not a shelf. The running border's is the host's
+        // alone - it puts it on a shape whose border runs - so it is not a
+        // look to pick either.
+        if meta.id == ADJUST_ID || meta.id == STROKE_RUN_ID || !keep(package) {
             continue;
         }
         let category = if meta.category.is_empty() {
@@ -1393,6 +1395,10 @@ struct ShelfStamp {
 
 /// The built-in colour package's id; see `adjust_rows` and `Studio::adjust_set`.
 const ADJUST_ID: &str = "concat.adjust";
+
+/// The intrinsic running-border effect's id; the host puts it on a shape
+/// whose border runs, so `shelves` keeps it off the picker like `ADJUST_ID`.
+const STROKE_RUN_ID: &str = "concat.stroke-run";
 
 /// The kinds the colour panel grades: a picture, and a layer, which grades
 /// everything beneath it - an adjustment layer is a layer whose chain
@@ -1652,6 +1658,9 @@ fn clip_commands(id: &str, before: &Clip, after: &Clip, magnetic: bool) -> Vec<C
     commands.extend(key_commands(id, before, after));
     if after.text != before.text {
         patch.text = Some(after.text.clone());
+    }
+    if after.shape != before.shape {
+        patch.shape = Some(after.shape.clone());
     }
     if after.video_effects != before.video_effects {
         patch.video_effects = Some(after.video_effects.clone());
@@ -5431,6 +5440,44 @@ impl Studio {
                 ClipField::BackgroundPaddingY => {
                     text.background_padding_y = value.clamp(0.0, 0.5);
                 }
+                // A figure's own look: its size, its border's thickness, and
+                // the running border's lit length and speed. `ShapeRun` is
+                // the switch, which parks the speed at zero when off and
+                // wakes a sensible crawl when first turned on.
+                ClipField::ShapeSize => {
+                    if let Some(shape) = clip.shape.as_mut() {
+                        shape.size = value.clamp(0.01, 2.0);
+                    }
+                }
+                ClipField::ShapeWidth => {
+                    if let Some(shape) = clip.shape.as_mut() {
+                        shape.stroke_width = value.clamp(0.0, 0.5);
+                    }
+                }
+                ClipField::ShapeDash => {
+                    if let Some(shape) = clip.shape.as_mut() {
+                        shape.stroke_dash = value.clamp(0.0, 1.0);
+                    }
+                }
+                ClipField::ShapeSpeed => {
+                    if let Some(shape) = clip.shape.as_mut() {
+                        shape.stroke_speed = value.clamp(0.0, 8.0);
+                    }
+                }
+                ClipField::ShapeRun => {
+                    if let Some(shape) = clip.shape.as_mut() {
+                        if value != 0.0 {
+                            if shape.stroke_speed <= 0.0 {
+                                shape.stroke_speed = 1.0;
+                            }
+                            if shape.stroke_dash >= 1.0 {
+                                shape.stroke_dash = 0.3;
+                            }
+                        } else {
+                            shape.stroke_speed = 0.0;
+                        }
+                    }
+                }
             }
             // A media clip has no text; the placeholder must not linger.
             if clip.kind != model::ClipKind::Text {
@@ -5618,14 +5665,26 @@ impl Studio {
             let Some(clip) = self.echo_clip_mut(&id) else {
                 continue;
             };
-            if clip.kind != model::ClipKind::Text {
-                continue;
-            }
-            let text = clip.text.get_or_insert_with(TextStyle::default);
-            match field {
-                ClipTextField::Color => text.color = hex_of(value),
-                ClipTextField::StrokeColor => text.stroke_color = hex_rgba(value),
-                ClipTextField::Background => text.background = hex_with_alpha(value),
+            match clip.kind {
+                model::ClipKind::Text => {
+                    let text = clip.text.get_or_insert_with(TextStyle::default);
+                    match field {
+                        ClipTextField::Color => text.color = hex_of(value),
+                        ClipTextField::StrokeColor => text.stroke_color = hex_rgba(value),
+                        ClipTextField::Background => text.background = hex_with_alpha(value),
+                        _ => {}
+                    }
+                }
+                // A figure takes its fill and its border colour directly.
+                model::ClipKind::Shape => {
+                    if let Some(shape) = clip.shape.as_mut() {
+                        match field {
+                            ClipTextField::ShapeFill => shape.fill = hex_with_alpha(value),
+                            ClipTextField::ShapeStroke => shape.stroke = hex_with_alpha(value),
+                            _ => {}
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -10662,6 +10721,11 @@ impl Studio {
         let fill = colour_of(&text.color);
         let stroke = colour_of(&text.stroke_color);
         let plate = colour_of(&text.background);
+        // A figure's own look, flattened for its panel; a non-shape carries
+        // none, and the panel stays hidden whatever these hold.
+        let shape = clip.shape.clone().unwrap_or_default();
+        let shape_fill = colour_of(&shape.fill);
+        let shape_stroke = colour_of(&shape.stroke);
         let analysis = clip.cutout.as_ref().and_then(|cutout| {
             self.cutout_jobs
                 .get(&Self::analysis_key(&clip.media_id, cutout.subject))
@@ -10737,6 +10801,12 @@ impl Studio {
             mask_rotation: shown(clip, model::KeyProperty::MaskRotation, at) as f32,
             mask_roundness: shown(clip, model::KeyProperty::MaskRoundness, at) as f32,
             mask_feather: shown(clip, model::KeyProperty::MaskFeather, at) as f32,
+            shape_fill,
+            shape_stroke,
+            shape_width: shape.stroke_width as f32,
+            shape_dash: shape.stroke_dash as f32,
+            shape_speed: shape.stroke_speed as f32,
+            shape_run_on: shape.animated(),
             fade_in: clip.fade_in as f32,
             fade_out: clip.fade_out as f32,
             content: text.content.as_str().into(),

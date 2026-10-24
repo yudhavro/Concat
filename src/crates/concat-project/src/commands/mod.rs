@@ -180,6 +180,16 @@ pub struct ClipPatch {
     )]
     #[cfg_attr(feature = "schema", schemars(with = "Option<Background>"))]
     pub background: Option<Option<Background>>,
+    /// The shape styling, same three-way wire semantics as `text`: absent
+    /// leaves it alone, null takes it off, a value replaces it. Only a
+    /// shape clip reads it.
+    #[serde(
+        default,
+        with = "double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<ShapeStyle>"))]
+    pub shape: Option<Option<ShapeStyle>>,
 }
 
 /// `Option<Option<T>>` over JSON: absent → None, null → Some(None).
@@ -1141,6 +1151,9 @@ impl Command {
                             style.max_width,
                             style.max_height,
                         ])
+                    })
+                    || patch.shape.iter().flatten().any(|style| {
+                        bad([style.size, style.stroke_width, style.stroke_dash, style.stroke_speed])
                     })
             }
             Command::SetClipSpeed { speed, .. } => bad([*speed]),

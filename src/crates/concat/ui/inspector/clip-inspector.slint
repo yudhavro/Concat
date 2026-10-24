@@ -43,6 +43,7 @@ import {
     BackdropData,
     ClipField,
     ClipKind,
+    ClipTextField,
     Keyframes,
     SelectedClipData,
     SelectedTransitionData,
@@ -1047,6 +1048,8 @@ export component VideoPanel inherits VerticalLayout {
     in property <bool> mask-section: true;
 
     callback set(field: ClipField, value: float);
+    /// A figure's fill or border colour picked.
+    callback set-colour(field: ClipTextField, value: color);
     /// A control gesture finished: the accumulated change becomes one command.
     callback commit();
     callback chain-add(id: string);
@@ -1126,6 +1129,11 @@ export component VideoPanel inherits VerticalLayout {
     property <float> mask-feather;
     property <float> smoothness;
     property <float> max-zoom;
+    /// The figure's border thickness, and the running border's lit length
+    /// and speed, each two-way with its knob and seeded like the rest.
+    property <float> shape-width;
+    property <float> shape-dash;
+    property <float> shape-speed;
     /// The mask's shape, as the picker orders them: -1 for none.
     property <int> mask: root.selected.mask;
     property <[string]> mask-names: [
@@ -1141,6 +1149,9 @@ export component VideoPanel inherits VerticalLayout {
         root.feather = root.selected.cutout-feather;
         root.smoothness = root.selected.stabilize-smoothness;
         root.max-zoom = root.selected.stabilize-max-zoom;
+        root.shape-width = root.selected.shape-width;
+        root.shape-dash = root.selected.shape-dash;
+        root.shape-speed = root.selected.shape-speed;
         root.mask-x = root.selected.mask-x;
         root.mask-y = root.selected.mask-y;
         root.mask-width = root.selected.mask-width;
@@ -1288,6 +1299,91 @@ export component VideoPanel inherits VerticalLayout {
                     horizontal-stretch: 1;
                     clicked => { Backdrop.frame(true); }
                 }
+            }
+        }
+    }
+
+    // A figure's own look: what it is filled with, the colour and weight of
+    // its border, and whether a lit run travels that border from its start
+    // point back round to it again. Only shapes carry this; footage and
+    // titles have no fill or border of their own to set.
+    if root.figure: Section {
+        figure := SectionHeader {
+            title: I18n.t("clipInspector.figure");
+            collapsible: true;
+            HelpButton {
+                text: I18n.t("clipInspector.figureHelp");
+            }
+        }
+
+        if figure.open: SectionBody {
+            ColourField {
+                label: I18n.t("clipInspector.figureFill");
+                value: root.selected.shape-fill;
+                alpha: true;
+                changed(colour) => {
+                    root.set-colour(ClipTextField.shape-fill, colour);
+                    root.commit();
+                }
+            }
+
+            ColourField {
+                label: I18n.t("clipInspector.figureBorder");
+                value: root.selected.shape-stroke;
+                alpha: true;
+                changed(colour) => {
+                    root.set-colour(ClipTextField.shape-stroke, colour);
+                    root.commit();
+                }
+            }
+
+            Param {
+                label: I18n.t("clipInspector.borderWidth");
+                value <=> root.shape-width;
+                minimum: 0;
+                maximum: 0.5;
+                step: 0.002;
+                default-value: 0.012;
+                fmt: ParamFormat.height;
+                changed(v) => { root.set(ClipField.shape-width, v); root.commit(); }
+            }
+
+            // The running border: a lit segment that walks the outline from
+            // where it begins back to that same point, at a speed below. A
+            // GPU effect rides the shape at render, so the run shows in the
+            // preview and the export, not in a still pulled on the CPU.
+            SwitchRow {
+                label: I18n.t("clipInspector.runBorder");
+                checked: root.selected.shape-run-on;
+
+                HelpButton { text: I18n.t("clipInspector.runBorderHelp"); }
+
+                toggled(on) => {
+                    root.set(ClipField.shape-run, on ? 1 : 0);
+                    root.commit();
+                }
+            }
+
+            if root.selected.shape-run-on: Param {
+                label: I18n.t("clipInspector.runLength");
+                value <=> root.shape-dash;
+                minimum: 0.05;
+                maximum: 0.95;
+                step: 0.01;
+                default-value: 0.3;
+                fmt: ParamFormat.fraction;
+                changed(v) => { root.set(ClipField.shape-dash, v); root.commit(); }
+            }
+
+            if root.selected.shape-run-on: Param {
+                label: I18n.t("clipInspector.runSpeed");
+                value <=> root.shape-speed;
+                minimum: 0.05;
+                maximum: 8;
+                step: 0.05;
+                default-value: 1;
+                fmt: ParamFormat.plain;
+                changed(v) => { root.set(ClipField.shape-speed, v); root.commit(); }
             }
         }
     }

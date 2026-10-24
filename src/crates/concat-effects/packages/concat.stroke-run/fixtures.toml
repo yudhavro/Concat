@@ -1,0 +1,31 @@
+# Outline drawing only touches a border the painter marked in the reveal map;
+# the probe harness binds the identity map, which reads zero everywhere, so
+# every pixel is off the border and left exactly as painted - at the default,
+# and at each bound of hold and duration alike.
+
+[[probe]]
+name = "default, a grey kept whole"
+input = [0.18, 0.18, 0.18, 1]
+expect = [0.18, 0.18, 0.18, 1]
+
+[[probe]]
+name = "default, a warm colour kept whole"
+input = [1.0, 0.6, 0.2, 1]
+expect = [1.0, 0.6, 0.2, 1]
+
+[[probe]]
+name = "minimum, a colour kept whole"
+at = "min"
+input = [1.0, 0.6, 0.2, 1]
+expect = [1.0, 0.6, 0.2, 1]
+
+[[probe]]
+name = "maximum, a colour kept whole"
+at = "max"
+input = [1.0, 0.6, 0.2, 1]
+expect = [1.0, 0.6, 0.2, 1]
+
+[[probe]]
+name = "default, half transparent kept whole"
+input = [0.5, 0.25, 0.75, 0.5]
+expect = [0.5, 0.25, 0.75, 0.5]

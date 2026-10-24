@@ -1,0 +1,31 @@
+format = 2
+
+[effect]
+id = "concat.stroke-run"
+name = "Outline Drawing"
+kind = "effect"
+category = "Stylize"
+version = 2
+description = "Draws a shape's border round its outline, holds it whole, then retracts it."
+
+# The two sliders keep their old keys, so the host's shape-run wiring is
+# untouched; their meaning moved with the effect. `speed` is now the seconds
+# one pass takes and `dash` the fraction of a pass the finished outline holds.
+[[param]]
+key = "dash"
+label = "Hold"
+min = 0
+max = 1
+default = 0.3
+step = 0.01
+
+[[param]]
+key = "speed"
+label = "Duration"
+min = 0.1
+max = 8
+default = 1
+step = 0.1
+
+[wgsl]
+entry = "effect.wgsl"

@@ -190,6 +190,11 @@ export enum ClipField {
     /// and the edge's softness 0..1
     mask-shape, mask-invert,
     mask-x, mask-y, mask-width, mask-height, mask-rotation, mask-roundness, mask-feather,
+    /// a figure's own look: its size and border thickness, each a fraction
+    /// of frame height; the running border's lit length (a share of the
+    /// perimeter, 0..1) and its speed (laps a second); and the run switch
+    /// as 0/1, which parks the speed and wakes a crawl - see `clip_set`
+    shape-size, shape-width, shape-dash, shape-speed, shape-run,
 }
 
 /// One keyable property's state at the playhead, as the inspector needs it.
@@ -318,6 +323,8 @@ export global Backdrop {
 /// The same again for the properties that are text rather than numbers.
 export enum ClipTextField {
     content, font-family, color, stroke-color, background,
+    /// a figure's fill and border colours, picked like a title's
+    shape-fill, shape-stroke,
 }
 
 /// The selected clip, flattened for the inspector.
@@ -400,6 +407,16 @@ export struct SelectedClipData {
     mask-rotation: float,
     mask-roundness: float,
     mask-feather: float,
+    // the figure (a shape clip): its fill and border colours, its border's
+    // thickness as a fraction of frame height, and the running border -
+    // lit as a share of the perimeter (0..1), at laps a second, with the
+    // switch below zero until it runs
+    shape-fill: color,
+    shape-stroke: color,
+    shape-width: float,
+    shape-dash: float,
+    shape-speed: float,
+    shape-run-on: bool,
     fade-in: float,
     fade-out: float,
 

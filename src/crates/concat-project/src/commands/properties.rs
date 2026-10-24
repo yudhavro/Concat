@@ -87,6 +87,9 @@ pub(super) fn apply(
             if let Some(background) = patch.background {
                 applied |= assign(&mut clip.background, background.map(Background::tidy));
             }
+            if let Some(shape) = patch.shape {
+                applied |= assign(&mut clip.shape, shape.map(ShapeStyle::tidy));
+            }
             Ok(Outcome {
                 created_id: None,
                 applied,
