@@ -5558,9 +5558,9 @@ impl Studio {
                     text.background_padding_y = value.clamp(0.0, 0.5);
                 }
                 // A figure's own look: its size, its border's thickness, and
-                // the running border's lit length and speed. `ShapeRun` is
-                // the switch, which parks the speed at zero when off and
-                // wakes a sensible crawl when first turned on.
+                // the outline drawing's duration. `ShapeRun` is the switch,
+                // which parks the duration at zero when off and wakes a
+                // one-second pass when first turned on.
                 ClipField::ShapeSize => {
                     if let Some(shape) = clip.shape.as_mut() {
                         shape.size = value.clamp(0.01, 2.0);
@@ -5586,9 +5586,6 @@ impl Studio {
                         if value != 0.0 {
                             if shape.stroke_speed <= 0.0 {
                                 shape.stroke_speed = 1.0;
-                            }
-                            if shape.stroke_dash >= 1.0 {
-                                shape.stroke_dash = 0.3;
                             }
                         } else {
                             shape.stroke_speed = 0.0;

@@ -1425,15 +1425,14 @@ pub struct ShapeStyle {
     /// The outline's thickness as a fraction of frame height; zero for a
     /// figure with no outline. A line's and an arrow's own thickness.
     pub stroke_width: f64,
-    /// How long the finished outline is held before it retracts, as a
-    /// fraction of one drawing pass: 0.0 runs straight back out again, 1.0
-    /// holds it whole for a full pass. Only read while the border is animated
-    /// by [`ShapeStyle::stroke_speed`].
+    /// Unused by the outline drawing, kept only so the effect's uniform
+    /// layout lines up; the border no longer holds or retracts. Only read
+    /// while the border is animated by [`ShapeStyle::stroke_speed`].
     pub stroke_dash: f64,
-    /// How long one pass of the outline drawing takes, in seconds: the border
-    /// traces itself on over this many seconds, holds for `stroke_dash` of a
-    /// pass, then retracts and loops. Zero leaves the border still, so it is
-    /// not animated. Only read when an outline is drawn.
+    /// How long the outline's one drawing pass takes, in seconds: the border
+    /// traces itself on over this many seconds and is gone the instant the
+    /// time is reached, so it does not loop. Zero leaves the border still, so
+    /// it is not animated. Only read when an outline is drawn.
     pub stroke_speed: f64,
 }
 

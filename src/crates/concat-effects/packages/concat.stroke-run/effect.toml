@@ -5,12 +5,13 @@ id = "concat.stroke-run"
 name = "Outline Drawing"
 kind = "effect"
 category = "Stylize"
-version = 2
-description = "Draws a shape's border round its outline, holds it whole, then retracts it."
+version = 3
+description = "Draws a shape's border round its outline once, over the duration, then removes it."
 
-# The two sliders keep their old keys, so the host's shape-run wiring is
-# untouched; their meaning moved with the effect. `speed` is now the seconds
-# one pass takes and `dash` the fraction of a pass the finished outline holds.
+# The two sliders keep their old keys so the host's shape-run wiring is
+# untouched. `speed` is the seconds one drawing pass takes (the duration); the
+# outline is gone when it is reached. `dash` is no longer read - it stays only
+# so the uniform layout still lines up.
 [[param]]
 key = "dash"
 label = "Hold"

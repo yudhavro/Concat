@@ -1,7 +1,7 @@
 # Outline drawing only touches a border the painter marked in the reveal map;
 # the probe harness binds the identity map, which reads zero everywhere, so
 # every pixel is off the border and left exactly as painted - at the default,
-# and at each bound of hold and duration alike.
+# and at each bound of the duration alike.
 
 [[probe]]
 name = "default, a grey kept whole"
