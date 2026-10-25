@@ -1487,10 +1487,11 @@ export component VideoPanel inherits VerticalLayout {
             }
 
             // The outline drawing: the border traces itself round the figure
-            // once, over the duration below, and is gone when that time is
-            // reached - it does not hold, retract, or loop. A GPU effect
-            // rides the shape at render, so it shows in the preview and the
-            // export, not in a still pulled on the CPU.
+            // once, across the clip's own length, and ends with it - it does
+            // not loop or retract. How long that takes is set by the clip's
+            // length on the track (drag its edge), not a number here. A GPU
+            // effect rides the shape at render, so it shows in the preview and
+            // the export, not in a still pulled on the CPU.
             SwitchRow {
                 label: I18n.t("clipInspector.runBorder");
                 checked: root.selected.shape-run-on;
@@ -1501,17 +1502,6 @@ export component VideoPanel inherits VerticalLayout {
                     root.set(ClipField.shape-run, on ? 1 : 0);
                     root.commit();
                 }
-            }
-
-            if root.selected.shape-run-on: Param {
-                label: I18n.t("clipInspector.runSpeed");
-                value <=> root.shape-speed;
-                minimum: 0.05;
-                maximum: 8;
-                step: 0.05;
-                default-value: 1;
-                fmt: ParamFormat.plain;
-                changed(v) => { root.set(ClipField.shape-speed, v); root.commit(); }
             }
         }
     }

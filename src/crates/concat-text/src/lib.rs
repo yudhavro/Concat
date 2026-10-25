@@ -2015,7 +2015,12 @@ pub fn shape_arc_map(style: &ShapeStyle, width: u32, height: u32) -> Vec<u8> {
         None => return map,
     };
     let line_style = Stroke {
-        width: rule,
+        // A hair wider than the border itself, so the map's hard coverage
+        // reaches past the border's anti-aliased fringe. The shader leaves
+        // any pixel the map misses exactly as painted; were the fringe left
+        // out, it would show through the whole pass as a faint rim that
+        // never draws on and never goes away.
+        width: rule + 3.0,
         line_cap: LineCap::Round,
         line_join: LineJoin::Round,
         ..Stroke::default()

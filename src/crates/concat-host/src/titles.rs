@@ -274,7 +274,7 @@ impl Titles {
             // the running segment reads through, and the effect that moves
             // it. Any other painting has neither.
             let run = match painting {
-                Painting::Shape(style) => shape_run(style, width, height),
+                Painting::Shape(style) => shape_run(style, width, height, clip.duration),
                 Painting::Title(_) => None,
             };
             let effects = match &run {
@@ -652,10 +652,17 @@ fn shape_style(style: &ShapeStyle) -> concat_text::ShapeStyle {
 pub const STROKE_RUN_ID: &str = "concat.stroke-run";
 
 /// For a shape whose border runs: the arc map its lit segment reads, and
-/// the effect that moves it, carrying the segment's length and speed as its
-/// parameters. Nothing for a shape whose border is still or absent, or for
-/// any other painting.
-fn shape_run(style: &ShapeStyle, width: u32, height: u32) -> Option<(Arc<RevealMap>, AppliedFilter)> {
+/// the effect that moves it. The effect's `speed` carries the clip's own
+/// length in seconds, so the border draws round across exactly the time the
+/// clip is on screen - trimming the clip on the track sets the duration, the
+/// way a built-in sticker's entrance does. Nothing for a shape whose border
+/// is still or absent, or for any other painting.
+fn shape_run(
+    style: &ShapeStyle,
+    width: u32,
+    height: u32,
+    duration: f64,
+) -> Option<(Arc<RevealMap>, AppliedFilter)> {
     if !style.animated() {
         return None;
     }
@@ -673,7 +680,7 @@ fn shape_run(style: &ShapeStyle, width: u32, height: u32) -> Option<(Arc<RevealM
         .insert("dash".to_owned(), style.stroke_dash);
     filter
         .params
-        .insert("speed".to_owned(), style.stroke_speed);
+        .insert("speed".to_owned(), duration.max(0.0001));
     Some((map, filter))
 }
 
